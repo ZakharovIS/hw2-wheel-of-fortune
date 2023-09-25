@@ -5,11 +5,17 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.PointF
 import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import android.view.accessibility.AccessibilityEvent
+import android.widget.LinearLayout
+import android.widget.Toast
+import androidx.core.animation.doOnEnd
+import kotlin.random.Random
 
 class WheelView
 @JvmOverloads constructor(
@@ -22,31 +28,44 @@ class WheelView
     private var center = PointF()
     private var rectF = RectF()
     private var angle = 0f
+    val startAngle = angle
+    var isSpinning = false
     private val strokePaint = Paint().apply {
         color = Color.BLACK
         style = Paint.Style.STROKE
         strokeWidth = 10f
     }
-    private val fillPaint = Paint().apply {
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
     }
-    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textSize = 16f
+    private val fillPaintArrow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
         color = Color.BLACK
     }
+    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 50f
+        color = Color.BLACK
+        textAlign = Paint.Align.CENTER
+    }
+    private val pathArrow = Path().apply {
+        moveTo(0f, 0f)
+        lineTo(80f, -20f)
+        lineTo(80f, 20f)
+        close()
+    }
 
-    private enum class SectorColor(val color: Int, val isText: Boolean) {
+    enum class SectorColor(val color: Int, val isText: Boolean) {
         RED(0xffff0000.toInt(), isText = true),
         ORANGE(0xffffa500.toInt(), isText = false),
         YELLOW(0xffffff00.toInt(), isText = true),
         GREEN(0xff008000.toInt(), isText = false),
         LIGHTBLUE(0xffadd8e6.toInt(), isText = true),
         BLUE(0xff0000ff.toInt(), isText = false),
-        PURPLE(0xff800080.toInt(), isText = true)
+        PURPLE(0xff800080.toInt(), isText = true);
+
     }
 
     private var currentColor = SectorColor.RED
-
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
@@ -56,41 +75,60 @@ class WheelView
         super.onLayout(changed, l, t, r, b)
         center = PointF(width / 2f, height / 2f)
         rectF = RectF(center.x - radius, center.y - radius, center.x + radius, center.y + radius)
+        pathArrow.offset(width / 2f + radius * 7 / 8, height / 2f)
     }
 
     override fun onDraw(canvas: Canvas) {
 
+        if (currentColor.isText) {
+            drawText(canvas)
+        }
         drawWheel(canvas)
         super.onDraw(canvas)
 
-
     }
 
-    fun startAnim() {
+    fun pickColor(): SectorColor {
+        val nextColor = Random.nextInt(0, 7)
 
-        val startAngle = angle
-        val animator = ValueAnimator.ofFloat(startAngle, 360f / 7 * 6 + startAngle + 360f)
-        animator.duration = 1000
+        return SectorColor.values()[nextColor]
+    }
+
+    fun startAnim(nextColor: SectorColor) {
+        val spinsCount = Random.nextInt(1, 5)
+        val animator = ValueAnimator.ofFloat(
+            angle,
+            (360f / SectorColor.values().size * (SectorColor.values().size - nextColor.ordinal)) + 360f * spinsCount
+        )
+        animator.duration = 2000
         animator.addUpdateListener {
             angle = it.animatedValue as Float
             invalidate()
         }
+        animator.doOnEnd {
+
+            currentColor = nextColor
+            angle = 360f - (360f / SectorColor.values().size * nextColor.ordinal)
+
+            Toast.makeText(context, "$currentColor $angle", Toast.LENGTH_SHORT).show()
+        }
         //animator.repeatCount = 30
         animator.start()
-        currentColor = SectorColor.values()[(currentColor.ordinal + 1) % 7]
+        //
 
 
     }
 
     override fun onTouchEvent(event: MotionEvent?): Boolean {
         spinWheel(event!!)
+
         return super.onTouchEvent(event)
     }
 
     private fun spinWheel(event: MotionEvent): Boolean {
         return when (event.action) {
             MotionEvent.ACTION_DOWN -> {
-                startAnim()
+                startAnim(pickColor())
                 true
             }
 
@@ -102,23 +140,23 @@ class WheelView
 
     fun drawWheel(canvas: Canvas) {
         canvas.drawCircle(width / 2f, height / 2f, radius, strokePaint)
-        //Toast.makeText(context, "$rectF", Toast.LENGTH_LONG).show()
         enumValues<SectorColor>().forEach {
-            fillPaint.color = SectorColor.values()[(it.ordinal + currentColor.ordinal) % 7].color
-
+            fillPaint.color = it.color
             canvas.drawArc(
                 rectF,
-                ((((-360f + 720f * it.ordinal) / 7) / 2) + angle),
-                (((360f) / 7)),
+                (((-180f + 360f * it.ordinal) / SectorColor.values().size) + angle),
+                (((360f) / SectorColor.values().size)),
                 true,
                 fillPaint
             )
         }
+        canvas.drawPath(pathArrow, fillPaintArrow)
+    }
 
-        /*val animation = RotateAnimation(0f, 360f, width / 2f, height / 2f)
-        animation.duration = 2500
-        animation.fillAfter
-        this.startAnimation(animation)*/
+    fun drawText(canvas: Canvas) {
+        val text = currentColor.name
+        val widthText = textPaint.measureText(text)
+        canvas.drawText(text, width / 2f, height / 2f + radius + 50f, textPaint)
     }
 
 }

@@ -15,8 +15,15 @@ class WheelWidget
 ) : LinearLayout(context, attrs, defStyleAttr) {
 
     val binding = WheelWidgetBinding.inflate(LayoutInflater.from(context))
+    val wheelView = WheelView(context, attrs, defStyleAttr)
 
     init {
         addView(binding.root)
+    }
+
+    override fun onAttachedToWindow() {
+        this.addView(wheelView)
+
+        super.onAttachedToWindow()
     }
 }
